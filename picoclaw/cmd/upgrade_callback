@@ -1,0 +1,13 @@
+#!/bin/bash
+# 升级完成钩子：覆盖文件后调用
+# 用途：把新二进制加可执行位；不覆盖已有 config.json（保留用户数据）
+set -e
+APP_DEST="${TRIM_APPDEST:-/app}"
+
+if [ -d "${APP_DEST}/bin" ]; then
+  chmod +x "${APP_DEST}/bin/"* 2>/dev/null || true
+fi
+
+echo "[picoclaw] upgrade_callback: 升级完成（用户配置与服务数据已保留）。"
+echo "[picoclaw] upgrade_callback: 手动重启应用即可加载新版本：应用中心 → PicoClaw → 启动"
+exit 0

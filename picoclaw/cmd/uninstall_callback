@@ -1,0 +1,5 @@
+#!/bin/bash
+# 卸载完成钩子
+set -e
+echo "[picoclaw] uninstall_callback: 已卸载。如需彻底清空数据，请手动删除 fnOS 应用数据目录。"
+exit 0

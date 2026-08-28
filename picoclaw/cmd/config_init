@@ -1,0 +1,7 @@
+#!/bin/bash
+# 配置修改前钩子
+set -e
+APP_DEST="${TRIM_APPDEST:-/app}"
+"${APP_DEST}/cmd/main" stop 2>/dev/null || true
+echo "[picoclaw] config_init: 已停服以应用新配置"
+exit 0

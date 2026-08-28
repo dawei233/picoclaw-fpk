@@ -1,0 +1,7 @@
+#!/bin/bash
+# 卸载前钩子：fnOS 在删除文件之前调用
+set -e
+APP_DEST="${TRIM_APPDEST:-/app}"
+"${APP_DEST}/cmd/main" stop 2>/dev/null || true
+echo "[picoclaw] uninstall_init: 已停服（数据位于 ${TRIM_PKGHOME:-/home/picoclaw} 与 ${TRIM_PKGETC:-/etc/picoclaw}，卸载时按 fnOS 设置保留与否决定）"
+exit 0

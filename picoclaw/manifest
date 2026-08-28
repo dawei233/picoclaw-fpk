@@ -1,0 +1,13 @@
+appname=picoclaw
+version=__VERSION__
+display_name=PicoClaw 控制台
+desc=<p>超轻量个人 AI 助手（Go 单二进制，&lt;10MB 内存，1 秒启动，17+ 聊天平台：Telegram/Discord/Slack/微信/企业微信/飞书/钉钉/QQ 等）。本包从 GitHub release 拉取最新版本，比飞牛官方应用商店里的旧版新很多。</p>
+maintainer=dawei233
+maintainer_url=https://github.com/dawei233
+source=thirdparty
+platform=x86
+desktop_uidir=ui
+desktop_applaunchname=picoclaw.main
+os_min_version=1.1.3100
+ctl_stop=true
+changelog=从 GitHub sipeed/picoclaw release 拉取最新 Linux x86_64 版本，桌面点击图标在 WebLauncher 中打开 18800 控制台。

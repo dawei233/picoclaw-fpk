@@ -1,0 +1,6 @@
+# Force LF line endings in all text files (CRLF in bash scripts breaks Linux runners)
+* text=auto eol=lf
+
+# Shell scripts must always be LF
+*.sh       text eol=lf
+cmd/*      text eol=lf

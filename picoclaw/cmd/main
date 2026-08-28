@@ -1,0 +1,101 @@
+#!/bin/bash
+# PicoClaw 控制脚本（飞牛 fnOS 应用生命周期）
+# 用法:
+#   cmd/main start   启动 launcher
+#   cmd/main stop    停 launcher
+#   cmd/main status  返回 running/stopped + exit 0/1
+#   cmd/main restart 重启
+#
+# 工作模式:
+#   ${TRIM_APPDEST}/bin/picoclaw-launcher        二进制（actions 注入）
+#   ${TRIM_PKGETC}/config.json                   运行时配置（用户可改）
+#   ${TRIM_PKGVAR}/app.log                       stdout/stderr 日志
+#   ${TRIM_PKGHOME}                              工作目录 / workspace
+#   ${TRIM_PKGTMP}/picoclaw.pid                  PID 文件
+#
+# 服务端口:
+#   launcher WebUI:  18800  (fnOS 反向代理自动暴露给桌面 WebLauncher)
+#   gateway backend: 18790  (本机服务，飞牛统一网关自动代理)
+set -e
+
+APP_DEST="${TRIM_APPDEST:-/app}"
+ETC_DIR="${TRIM_PKGETC:-/etc/picoclaw}"
+VAR_DIR="${TRIM_PKGVAR:-/var/lib/picoclaw}"
+HOME_DIR="${TRIM_PKGHOME:-/home/picoclaw}"
+TMP_DIR="${TRIM_PKGTMP:-/tmp/picoclaw}"
+PID_FILE="${TMP_DIR}/picoclaw.pid"
+LOG_FILE="${VAR_DIR}/app.log"
+BIN="${APP_DEST}/bin/picoclaw-launcher"
+
+mkdir -p "${ETC_DIR}" "${VAR_DIR}" "${HOME_DIR}" "${TMP_DIR}" "${HOME_DIR}/workspace"
+
+start() {
+  if [ ! -x "${BIN}" ]; then
+    echo "[picoclaw] binary not found or not executable: ${BIN}" >&2
+    return 1
+  fi
+
+  if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+    echo "[picoclaw] already running (pid=$(cat "${PID_FILE}"))"
+    return 0
+  fi
+
+  # 配置就位：缺失时先装一份默认 config.json
+  if [ ! -f "${ETC_DIR}/config.json" ]; then
+    if [ -f "${APP_DEST}/default-config.json" ]; then
+      cp "${APP_DEST}/default-config.json" "${ETC_DIR}/config.json"
+    fi
+  fi
+
+  export PICOCLAW_CONFIG="${ETC_DIR}/config.json"
+  export PICOCLAW_DATA_DIR="${HOME_DIR}"
+  export PICOCLAW_WORKSPACE_DIR="${HOME_DIR}/workspace"
+  export PICOCLAW_LOG_LEVEL="${PICOCLAW_LOG_LEVEL:-info}"
+  export PICOCLAW_GATEWAY_HOST="${PICOCLAW_GATEWAY_HOST:-0.0.0.0}"
+
+  echo "[picoclaw] starting launcher -> ${LOG_FILE}"
+  nohup "${BIN}" -public >> "${LOG_FILE}" 2>&1 &
+  echo $! > "${PID_FILE}"
+  echo "[picoclaw] started pid=$(cat "${PID_FILE}")"
+}
+
+stop() {
+  if [ ! -f "${PID_FILE}" ]; then
+    echo "[picoclaw] not running"
+    return 0
+  fi
+  pid="$(cat "${PID_FILE}")"
+  if kill -0 "${pid}" 2>/dev/null; then
+    kill "${pid}" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do
+      kill -0 "${pid}" 2>/dev/null || break
+      sleep 1
+    done
+    kill -0 "${pid}" 2>/dev/null && kill -9 "${pid}" 2>/dev/null || true
+    echo "[picoclaw] stopped pid=${pid}"
+  fi
+  rm -f "${PID_FILE}"
+}
+
+status() {
+  if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+    echo "[picoclaw] running pid=$(cat "${PID_FILE}")"
+    exit 0
+  fi
+  echo "[picoclaw] stopped"
+  exit 1
+}
+
+restart() {
+  stop
+  sleep 1
+  start
+}
+
+case "${1:-}" in
+  start)   start ;;
+  stop)    stop ;;
+  status)  status ;;
+  restart) restart ;;
+  *) echo "Usage: $0 {start|stop|status|restart}" >&2; exit 1 ;;
+esac

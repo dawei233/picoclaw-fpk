@@ -1,0 +1,3 @@
+{
+  "_comment": "飞牛 fnOS 安装向导 UI 定义。本 fpk 暂时无交互式向导 —— 用户在安装完后到应用配置页直接编辑 config.json 即可。如果你希望加上 LLM API key 输入向导，可在此扩展 wizard_ 字段。"
+}

@@ -1,0 +1,8 @@
+#!/bin/bash
+# 升级前钩子：fnOS 在覆盖文件之前调用
+# 用途：先停服务再让 fnOS 覆盖文件
+set -e
+APP_DEST="${TRIM_APPDEST:-/app}"
+"${APP_DEST}/cmd/main" stop 2>/dev/null || true
+echo "[picoclaw] upgrade_init: 已停服"
+exit 0

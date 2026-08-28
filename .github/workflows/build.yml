@@ -1,0 +1,105 @@
+name: build-fpk
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'picoclaw/**'
+      - 'README.md'
+  workflow_dispatch:
+    inputs:
+      pin_version:
+        description: '锁定的 PicoClaw 版本（留空 = 拉最新）'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build .fpk from latest PicoClaw release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- 1. 解析 PicoClaw 版本 ----
+      - name: Resolve PicoClaw version
+        id: meta
+        env:
+          PIN_VERSION: ${{ inputs.pin_version }}
+        run: |
+          if [ -n "${PIN_VERSION}" ]; then
+            TAG="v${PIN_VERSION#v}"
+          else
+            TAG=$(curl -fsSL https://api.github.com/repos/sipeed/picoclaw/releases/latest \
+                  | jq -r '.tag_name')
+          fi
+          if [ -z "${TAG}" ] || [ "${TAG}" = "null" ]; then
+            echo "::error::无法解析 PicoClaw 版本号"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "✅ target version: ${VERSION} (${TAG})"
+
+      # ---- 2. 下载 PicoClaw Linux x86_64 tarball ----
+      - name: Download PicoClaw binary
+        run: |
+          mkdir -p picoclaw/app/bin
+          echo "⬇️ downloading https://github.com/sipeed/picoclaw/releases/download/${{ steps.meta.outputs.tag }}/picoclaw_Linux_x86_64.tar.gz"
+          curl -fsSL -o picoclaw.tar.gz \
+            "https://github.com/sipeed/picoclaw/releases/download/${{ steps.meta.outputs.tag }}/picoclaw_Linux_x86_64.tar.gz"
+          echo "📦 tarball contents:"
+          tar -tzf picoclaw.tar.gz | head -20
+          tar -xzf picoclaw.tar.gz -C picoclaw/app/bin --strip-components=1
+          chmod +x picoclaw/app/bin/*
+          echo "📁 bin contents:"
+          ls -la picoclaw/app/bin/
+          file picoclaw/app/bin/* 2>/dev/null || true
+
+      # ---- 3. 把解析出的版本号注入 manifest ----
+      - name: Inject version into manifest
+        run: |
+          sed -i "s/__VERSION__/${{ steps.meta.outputs.version }}/g" picoclaw/manifest
+          echo "📄 manifest after injection:"
+          cat picoclaw/manifest
+
+      # ---- 4. 拿 fnpack CLI ----
+      - name: Download fnpack CLI 1.2.3 (linux-amd64)
+        run: |
+          curl -fsSL -o fnpack \
+            "https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64"
+          chmod +x fnpack
+          ./fnpack --help | head -30
+
+      # ---- 5. 跑 fnpack build ----
+      - name: Build .fpk
+        run: |
+          ./fnpack build picoclaw
+          echo "📦 build outputs:"
+          find . -maxdepth 2 -name '*.fpk' -exec ls -la {} \;
+
+      # ---- 6. 规范化产物名 + 上传 artifact ----
+      - name: Upload Artifact
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          FPK=$(find . -maxdepth 2 -name '*.fpk' | head -1)
+          if [ -z "${FPK}" ]; then
+            echo "::error::未找到 .fpk 产物"
+            exit 1
+          fi
+          cp "${FPK}" "picoclaw-${VERSION}.fpk"
+          echo "✅ artifact: picoclaw-${VERSION}.fpk ($(du -h picoclaw-${VERSION}.fpk | cut -f1))"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: picoclaw-fpk-${{ steps.meta.outputs.version }}
+          path: picoclaw-${{ steps.meta.outputs.version }}.fpk
+          if-no-files-found: error
+          retention-days: 90

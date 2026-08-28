@@ -1,0 +1,27 @@
+#!/bin/bash
+# 安装完成钩子：fnOS 在写入数据库之后调用
+# 用途：首次安装时初始化配置目录；老安装不要覆盖用户已修改的 config.json
+set -e
+APP_DEST="${TRIM_APPDEST:-/app}"
+ETC_DIR="${TRIM_PKGETC:-/etc/picoclaw}"
+VAR_DIR="${TRIM_PKGVAR:-/var/lib/picoclaw}"
+HOME_DIR="${TRIM_PKGHOME:-/home/picoclaw}"
+TMP_DIR="${TRIM_PKGTMP:-/tmp/picoclaw}"
+
+mkdir -p "${ETC_DIR}" "${VAR_DIR}" "${HOME_DIR}" "${HOME_DIR}/workspace" "${TMP_DIR}"
+
+# 二进制加可执行位（fnpack 解包时可能丢失）
+if [ -d "${APP_DEST}/bin" ]; then
+  chmod +x "${APP_DEST}/bin/"* 2>/dev/null || true
+fi
+
+# 首次安装：放一份默认 config.json
+if [ ! -f "${ETC_DIR}/config.json" ]; then
+  if [ -f "${APP_DEST}/default-config.json" ]; then
+    cp "${APP_DEST}/default-config.json" "${ETC_DIR}/config.json"
+    echo "[picoclaw] install_callback: 写入默认配置到 ${ETC_DIR}/config.json（请到应用配置页修改后重启）"
+  fi
+fi
+
+echo "[picoclaw] install_callback: 安装完成"
+exit 0

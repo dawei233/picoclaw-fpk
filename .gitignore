@@ -1,0 +1,22 @@
+# --- 本地构建产物 ---
+*.fpk
+fnpack
+fnpack.exe
+picoclaw.tar.gz
+picoclaw/app/bin/picoclaw
+picoclaw/app/bin/picoclaw-launcher
+picoclaw/app/bin/picoclaw-launcher-tui
+
+# --- 原始图标资产（生成后可删）---
+assets-src/*.png
+assets-src/*.webp
+assets-src/*.jpg
+
+# --- 操作系统 ---
+.DS_Store
+Thumbs.db
+
+# --- 编辑器 ---
+.vscode/
+.idea/
+*.swp

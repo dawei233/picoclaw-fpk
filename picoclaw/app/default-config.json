@@ -1,0 +1,26 @@
+{
+  "_comment": "PicoClaw 默认配置。首次启动时 cmd/install_callback 会把本文件复制到 ${TRIM_PKGETC}/config.json。请到飞牛应用详情 → 配置 → 编辑 config.json → 填入你的 LLM provider API key 与渠道（飞书/QQ/Telegram 等）后重启应用生效。",
+  "version": 3,
+  "log_level": "info",
+  "data_dir": "${TRIM_PKGHOME}",
+  "workspace_dir": "${TRIM_PKGHOME}/workspace",
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790,
+    "log_level": "warn"
+  },
+  "agents": {
+    "defaults": {
+      "model_name": "gpt-4o-mini",
+      "max_steps": 8
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "gpt-4o-mini",
+      "model": "openai/gpt-4o-mini",
+      "api_key": "REPLACE_ME"
+    }
+  ],
+  "channel_list": []
+}
