@@ -49,14 +49,28 @@ jobs:
       # ---- 2. 下载 PicoClaw Linux x86_64 tarball ----
       - name: Download PicoClaw binary
         run: |
+          set -e
           mkdir -p picoclaw/app/bin
           echo "⬇️ downloading https://github.com/sipeed/picoclaw/releases/download/${{ steps.meta.outputs.tag }}/picoclaw_Linux_x86_64.tar.gz"
           curl -fsSL -o picoclaw.tar.gz \
             "https://github.com/sipeed/picoclaw/releases/download/${{ steps.meta.outputs.tag }}/picoclaw_Linux_x86_64.tar.gz"
           echo "📦 tarball contents:"
-          tar -tzf picoclaw.tar.gz | head -20
-          tar -xzf picoclaw.tar.gz -C picoclaw/app/bin --strip-components=1
-          chmod +x picoclaw/app/bin/*
+          tar -tzf picoclaw.tar.gz
+          # v0.2.x: 顶层是 picoclaw_Linux_x86_64/{picoclaw,...}, 需 --strip-components=1
+          # v0.3.x: 顶层直接是二进制文件, 不需要 strip
+          # 兼容两种: 先试带 strip, 失败回退不带
+          if tar -xzf picoclaw.tar.gz -C picoclaw/app/bin --strip-components=1 2>/dev/null \
+             && ls picoclaw/app/bin/picoclaw picoclaw/app/bin/picoclaw-launcher 2>/dev/null; then
+            echo "✅ extracted with --strip-components=1"
+          else
+            # 回退: 清空 bin, 直接解压
+            rm -rf picoclaw/app/bin/*
+            tar -xzf picoclaw.tar.gz -C picoclaw/app/bin
+            # 清理 tar 自带的 LICENSE / README
+            rm -f picoclaw/app/bin/LICENSE picoclaw/app/bin/README.md picoclaw/app/bin/license picoclaw/app/bin/readme.md 2>/dev/null || true
+            echo "✅ extracted flat"
+          fi
+          chmod +x picoclaw/app/bin/* 2>/dev/null || true
           echo "📁 bin contents:"
           ls -la picoclaw/app/bin/
           file picoclaw/app/bin/* 2>/dev/null || true

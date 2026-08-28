@@ -33,7 +33,7 @@ fnOS 应用包: picoclaw-<version>.fpk
 │   ├── bin/
 │   │   ├── picoclaw              ← 主程序（CLI / onboard / agent）
 │   │   ├── picoclaw-launcher     ← Web 控制台（监听 18800）
-│   │   └── picoclaw-launcher-tui ← 终端控制台（可选，本包未注册桌面入口）
+│   │   └── picoclaw-launcher-tui ← 终端控制台（v0.3.x 起已移除，见注）
 │   ├── default-config.json       ← 首次启动自动复制到 ${TRIM_PKGETC}/
 │   └── cmd/                      ← 8 个生命周期脚本（main + 7 hook）
 ├── ${TRIM_PKGETC}/config.json    ← 用户最终改这个
@@ -41,6 +41,8 @@ fnOS 应用包: picoclaw-<version>.fpk
 ├── ${TRIM_PKGVAR}/app.log        ← 主进程日志
 └── ${TRIM_PKGTMP}/picoclaw.pid   ← 进程 PID
 ```
+
+> 注：v0.3.x 起上游已移除 `picoclaw-launcher-tui`，只保留 `picoclaw` 和 `picoclaw-launcher` 两个二进制（v0.2.x 的旧 release 还会带 TUI）。如要终端交互，SSH 进 NAS 直接跑 `picoclaw` 主程序即可。
 
 ## 本地构建（可选）
 
@@ -54,7 +56,11 @@ TAG=$(curl -fsSL https://api.github.com/repos/sipeed/picoclaw/releases/latest | 
 mkdir -p picoclaw/app/bin
 curl -fsSL -o picoclaw.tar.gz \
   "https://github.com/sipeed/picoclaw/releases/download/${TAG}/picoclaw_Linux_x86_64.tar.gz"
-tar -xzf picoclaw.tar.gz -C picoclaw/app/bin --strip-components=1
+# v0.2.x: tar 顶层是 picoclaw_Linux_x86_64/{...}  → --strip-components=1
+# v0.3.x: tar 顶层直接是 picoclaw / picoclaw-launcher → 不 strip
+tar -xzf picoclaw.tar.gz -C picoclaw/app/bin --strip-components=1 2>/dev/null \
+  || tar -xzf picoclaw.tar.gz -C picoclaw/app/bin
+rm -f picoclaw/app/bin/LICENSE picoclaw/app/bin/README.md 2>/dev/null
 chmod +x picoclaw/app/bin/*
 
 # 注入 version
