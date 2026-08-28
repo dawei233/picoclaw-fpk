@@ -1,11 +1,9 @@
 {
   ".url": {
     "picoclaw.main": {
-      "title": "PicoClaw 控制台",
+      "title": "PicoClaw Console",
       "icon": "images/icon_{0}.png",
       "type": "url",
-      "protocol": "http",
-      "port": "18800",
       "url": "/",
       "allUsers": true
     }
