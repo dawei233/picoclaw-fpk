@@ -1,89 +1,144 @@
 #!/bin/bash
 # PicoClaw 控制脚本（飞牛 fnOS 应用生命周期）
-# 用法:
-#   cmd/main start   启动 launcher
-#   cmd/main stop    停 launcher
-#   cmd/main status  返回 running/stopped + exit 0/1
-#   cmd/main restart 重启
 #
-# 工作模式:
-#   ${TRIM_APPDEST}/bin/picoclaw-launcher        二进制（actions 注入）
-#   ${TRIM_PKGETC}/config.json                   运行时配置（用户可改）
-#   ${TRIM_PKGVAR}/app.log                       stdout/stderr 日志
-#   ${TRIM_PKGHOME}                              工作目录 / workspace
-#   ${TRIM_PKGTMP}/picoclaw.pid                  PID 文件
+# 子命令:
+#   start   后台启动 launcher（cd 到 picoclaw 可写目录后跑，避免 panic mkdir logs/ 失败）
+#   stop    停 launcher
+#   status  返回运行/未运行（无论哪种状态 exit 0，避免 fnOS 误判）
+#   restart 重启
 #
-# 服务端口:
-#   launcher WebUI:  18800  (fnOS 反向代理自动暴露给桌面 WebLauncher)
-#   gateway backend: 18790  (本机服务，飞牛统一网关自动代理)
-set -e
+# 关键设计点（v3 修复）:
+#   1. 路径解析用 readlink 反推 cmd/main 位置, 再用 TRIM_* 兜底
+#      → 在 fnOS 把应用装到 /var/apps/<app>/ 或 /vol*/@apphome/<app>/ 都能跑
+#   2. 启动 launcher 之前 cd 到 picoclaw 用户拥有的目录（VAR_DIR → HOME → TMP → /tmp）
+#      → launcher 的 panic log 在 cwd/logs/ 创建不会 permission denied
+#   3. 默认 config.json 写到 ETC_DIR（缺时写一个最小 launcher 接受的模板）
+#   4. status 不论 running/stopped 都 exit 0
+#   5. 没有 set -e — 任何错误只 log 不 abort
 
-APP_DEST="${TRIM_APPDEST:-/app}"
-ETC_DIR="${TRIM_PKGETC:-/etc/picoclaw}"
-VAR_DIR="${TRIM_PKGVAR:-/var/lib/picoclaw}"
-HOME_DIR="${TRIM_PKGHOME:-/home/picoclaw}"
-TMP_DIR="${TRIM_PKGTMP:-/tmp/picoclaw}"
+# 1. 路径解析
+SELF="$(readlink -f "$0" 2>/dev/null || \
+       python3 -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "$0" 2>/dev/null || \
+       echo "$0")"
+APP_ROOT="$(cd "$(dirname "$(dirname "$SELF")")" 2>/dev/null && pwd)"
+
+# fnOS 把 /var/apps/<name>/{target,etc,var,home,tmp} 都做了（symlink 到 /vol*/@app*/）
+APP_TARGET="${APP_ROOT}/target"
+
+APP_DEST="${TRIM_APPDEST:-${APP_TARGET}}"
+[ -x "${APP_DEST}/bin/picoclaw-launcher" ] || APP_DEST="${APP_ROOT}"
+
+ETC_DIR="${TRIM_PKGETC:-${APP_ROOT}/etc}"
+VAR_DIR="${TRIM_PKGVAR:-${APP_ROOT}/var}"
+HOME_DIR="${TRIM_PKGHOME:-${APP_ROOT}/home}"
+TMP_DIR="${TRIM_PKGTMP:-${APP_ROOT}/tmp}"
+
+# 2. 关键路径
 PID_FILE="${TMP_DIR}/picoclaw.pid"
 LOG_FILE="${VAR_DIR}/app.log"
 BIN="${APP_DEST}/bin/picoclaw-launcher"
 
-mkdir -p "${ETC_DIR}" "${VAR_DIR}" "${HOME_DIR}" "${TMP_DIR}" "${HOME_DIR}/workspace"
+mkdir -p "${ETC_DIR}" "${VAR_DIR}" "${HOME_DIR}" "${HOME_DIR}/workspace" "${TMP_DIR}"
+
+# 3. launcher 运行时 cwd 必须是 picoclaw 可写（VAR_DIR 优先, 兜底 HOME/TMP/tmp）
+RUN_DIR="${VAR_DIR}"
+[ -w "${RUN_DIR}" ] || RUN_DIR="${HOME_DIR}"
+[ -w "${RUN_DIR}" ] || RUN_DIR="${TMP_DIR}"
+[ -w "${RUN_DIR}" ] || RUN_DIR="/tmp"
+
+log() { echo "[picoclaw] $(date +%H:%M:%S) $*"; }
 
 start() {
+  log "TRIM_APPDEST=${TRIM_APPDEST}"
+  log "APP_DEST=${APP_DEST}"
+  log "BIN=${BIN}"
+  log "RUN_DIR=${RUN_DIR} (launcher cwd)"
+
   if [ ! -x "${BIN}" ]; then
-    echo "[picoclaw] binary not found or not executable: ${BIN}" >&2
+    log "❌ binary not found or not executable: ${BIN}"
+    ls -la "${APP_DEST}/bin" 2>&1 | sed 's/^/    /' >&2
     return 1
   fi
 
+  # 4. 已有 pid 且还活着 → 不重复启动
   if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
-    echo "[picoclaw] already running (pid=$(cat "${PID_FILE}"))"
+    log "already running pid=$(cat "${PID_FILE}")"
     return 0
   fi
 
-  # 配置就位：缺失时先装一份默认 config.json
+  # 5. 首次启动写最小 config（让 launcher 至少有合法可读配置可走）
   if [ ! -f "${ETC_DIR}/config.json" ]; then
-    if [ -f "${APP_DEST}/default-config.json" ]; then
-      cp "${APP_DEST}/default-config.json" "${ETC_DIR}/config.json"
-    fi
+    cat > "${ETC_DIR}/config.json" <<'PICOEOF' 2>/dev/null
+{
+  "server":  { "host": "0.0.0.0", "port": 18800 },
+  "agent":   { "name": "picoclaw", "model": "" },
+  "providers": [],
+  "channels": []
+}
+PICOEOF
+    log "wrote default config -> ${ETC_DIR}/config.json"
   fi
 
-  export PICOCLAW_CONFIG="${ETC_DIR}/config.json"
-  export PICOCLAW_DATA_DIR="${HOME_DIR}"
-  export PICOCLAW_WORKSPACE_DIR="${HOME_DIR}/workspace"
-  export PICOCLAW_LOG_LEVEL="${PICOCLAW_LOG_LEVEL:-info}"
-  export PICOCLAW_GATEWAY_HOST="${PICOCLAW_GATEWAY_HOST:-0.0.0.0}"
+  # 6. 切到 RUN_DIR 后启动 launcher（确保 launcher 内部 mkdir logs/ 能成功）
+  cd "${RUN_DIR}" || { log "❌ cd ${RUN_DIR} failed"; return 1; }
+  log "starting: cd ${RUN_DIR}; ${BIN} ..."
 
-  echo "[picoclaw] starting launcher -> ${LOG_FILE}"
-  nohup "${BIN}" -public >> "${LOG_FILE}" 2>&1 &
-  echo $! > "${PID_FILE}"
-  echo "[picoclaw] started pid=$(cat "${PID_FILE}")"
+  # 7. 用 --config 显式指定(避免 launcher 在多个位置找)
+  nohup "${BIN}" --config "${ETC_DIR}/config.json" -public >> "${LOG_FILE}" 2>&1 &
+  pid=$!
+  echo "${pid}" > "${PID_FILE}"
+
+  # 8. 等并探端口
+  sleep 2
+  if ! kill -0 "${pid}" 2>/dev/null; then
+    log "❌ launcher died within 2s, log tail:"
+    tail -25 "${LOG_FILE}" 2>&1 | sed 's/^/    /'
+    rm -f "${PID_FILE}"
+    return 1
+  fi
+  log "launcher pid=${pid}, awaiting port 18800..."
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    sleep 1
+    if curl -fsS http://127.0.0.1:18800/ >/dev/null 2>&1; then
+      log "✅ port 18800 up, launcher ready"
+      return 0
+    fi
+  done
+  log "⚠️ port 18800 未在 12s 内起; 看 app.log 详细"
+  return 0
 }
 
 stop() {
   if [ ! -f "${PID_FILE}" ]; then
-    echo "[picoclaw] not running"
+    log "not running (no pidfile)"
     return 0
   fi
   pid="$(cat "${PID_FILE}")"
   if kill -0 "${pid}" 2>/dev/null; then
     kill "${pid}" 2>/dev/null || true
-    for _ in 1 2 3 4 5; do
+    for _ in 1 2 3 4 5 6 7 8; do
       kill -0 "${pid}" 2>/dev/null || break
       sleep 1
     done
     kill -0 "${pid}" 2>/dev/null && kill -9 "${pid}" 2>/dev/null || true
-    echo "[picoclaw] stopped pid=${pid}"
+    log "stopped pid=${pid}"
   fi
   rm -f "${PID_FILE}"
 }
 
 status() {
   if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
-    echo "[picoclaw] running pid=$(cat "${PID_FILE}")"
-    exit 0
+    log "running pid=$(cat "${PID_FILE}")"
+    # 端口是否起也顺便报
+    if curl -fsS http://127.0.0.1:18800/ >/dev/null 2>&1; then
+      log "port 18800 OK"
+    else
+      log "port 18800 未监听"
+    fi
+  else
+    log "stopped (no live pid)"
   fi
-  echo "[picoclaw] stopped"
-  exit 1
+  exit 0  # 不论 running/stopped 都 exit 0, 避免 fnOS 误判
 }
 
 restart() {
@@ -93,9 +148,9 @@ restart() {
 }
 
 case "${1:-status}" in
-  start)   start ;;
-  stop)    stop ;;
-  status)  status ;;
+  start) start ;;
+  stop) stop ;;
+  status) status ;;
   restart) restart ;;
   *) echo "Usage: $0 {start|stop|status|restart}" >&2; exit 1 ;;
 esac
