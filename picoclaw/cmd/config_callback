@@ -1,5 +1,4 @@
 #!/bin/bash
 # 配置修改完成钩子
-set -e
-echo "[picoclaw] config_callback: 配置已写入。重启应用生效。"
+echo "[picoclaw] config_callback: ok（重启应用生效）"
 exit 0

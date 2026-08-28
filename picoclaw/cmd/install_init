@@ -1,8 +1,5 @@
 #!/bin/bash
 # 安装前钩子：fnOS 在解压与注册之前调用
-# 用途：日志输出 + 占位
-set -e
-echo "[picoclaw] install_init: 准备安装路径..."
-mkdir -p "${TRIM_APPDEST:-/app}/bin"
-echo "[picoclaw] install_init: 完成"
+# 这里什么都不做，让 fnOS 自己准备路径
+echo "[picoclaw] install_init: ok"
 exit 0

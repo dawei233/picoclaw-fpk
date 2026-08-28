@@ -8,6 +8,6 @@ source=thirdparty
 platform=x86
 desktop_uidir=ui
 desktop_applaunchname=picoclaw.main
-os_min_version=1.1.3100
+os_min_version=1.0.0
 ctl_stop=true
 changelog=从 GitHub sipeed/picoclaw release 拉取最新 Linux x86_64 版本，桌面点击图标在 WebLauncher 中打开 18800 控制台。
