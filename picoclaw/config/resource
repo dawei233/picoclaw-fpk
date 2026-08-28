@@ -2,9 +2,14 @@
   "data-share": {
     "shares": [
       {
-        "name": "picoclaw/data",
-        "permission": "readwrite"
+        "name": "picoclaw/data"
       }
+    ]
+  },
+  "usr-local-linker": {
+    "bin": [
+      "bin/picoclaw",
+      "bin/picoclaw-launcher"
     ]
   }
 }
