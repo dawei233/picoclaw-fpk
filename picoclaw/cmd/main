@@ -83,8 +83,12 @@ PICOEOF
   cd "${RUN_DIR}" || { log "❌ cd ${RUN_DIR} failed"; return 1; }
   log "starting: cd ${RUN_DIR}; ${BIN} ..."
 
-  # 7. 用 --config 显式指定(避免 launcher 在多个位置找)
-  nohup "${BIN}" --config "${ETC_DIR}/config.json" -public >> "${LOG_FILE}" 2>&1 &
+  # 7. launcher 默认 ~/.picoclaw/config.json → 展开成 ${HOME}/.picoclaw/
+  #    picoclaw 用户的 /home/picoclaw 不存在 / 不可写, 必须 export HOME 到可写目录
+  #    同时显式 positional 传 config.json 避免 launcher 自己用 ~/.picoclaw/config.json
+  #    用 -no-browser 让 WebView 不要自动弹窗 (fnOS 反向代理直接接管 18800)
+  export HOME="${HOME_DIR}"
+  nohup "${BIN}" -public -no-browser -port 18800 "${ETC_DIR}/config.json" >> "${LOG_FILE}" 2>&1 &
   pid=$!
   echo "${pid}" > "${PID_FILE}"
 
